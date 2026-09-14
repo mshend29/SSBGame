@@ -49,8 +49,6 @@ export default function PlayPage() {
       })
       .subscribe()
 
-    // Realtime is the fast path. Polling is an intentional fallback for event Wi-Fi,
-    // sleeping mobile browsers, or a dropped websocket connection.
     const poll = setInterval(refreshSession, 1200)
     const onVisible = () => { if (document.visibilityState === 'visible') refreshSession() }
     document.addEventListener('visibilitychange', onVisible)
@@ -137,6 +135,7 @@ export default function PlayPage() {
 
   async function choose(choiceId) {
     if (!event || session.event_phase !== 'voting' || picked) return
+    if (!player?.budget_confirmed) return setError('Budget belum terkunci. Minta host membuka budgeting kembali sebelum melanjutkan ronde.')
     setError('')
     const { error: ce } = await playerClient.from('player_choices').insert({ player_id: player.id, event_id: event.id, choice_id: choiceId })
     if (ce) return setError(ce.message)
@@ -182,10 +181,22 @@ export default function PlayPage() {
     const selected = options.find(o=>o.id===picked)
     return <main className="shell"><div className="topbar"><div className="brand">💸 Smart Student Budget</div><span className="pill">ROUND {event.event_order}</span></div>
       <div className="grid"><section className="event-card span-8"><div className="event-kicker">{event.kicker}</div><h1 style={{fontSize:'clamp(2.2rem,7vw,4.6rem)',marginTop:8}}>{event.title}</h1><p>{event.description}</p>
-        <div className="event-options">{options.map(o=><button key={o.id} className="event-option" disabled={!!picked||session.event_phase!=='voting'} onClick={()=>choose(o.id)}><strong>{o.label}</strong><small>{o.description}</small></button>)}</div>
-        {picked && session.event_phase==='voting' && <div className="success" style={{marginTop:16}}>Pilihanmu sudah terkunci. Tunggu reveal dari host.</div>}
-        {picked && session.event_phase==='reveal' && selected && <div className="panel" style={{marginTop:16,padding:18}}><span className="eyebrow">CONSEQUENCE</span><h3>{selected.reveal_text}</h3><p>Saldo: {selected.balance_delta>=0?'+':''}{rupiah(selected.balance_delta)} · Finance {signed(selected.finance_delta)} · Academic {signed(selected.academic_delta)} · Social {signed(selected.social_delta)} · Wellbeing {signed(selected.wellbeing_delta)}</p></div>}
-      </section><aside className="panel span-4"><span className="eyebrow">YOUR STATUS</span><div className="money" style={{fontSize:'2.5rem'}}>{rupiah(player.balance)}</div><ScoreRow player={player}/>{error&&<div className="error" style={{marginTop:16}}>{error}</div>}</aside></div>
+        <div className="decision-note">Lihat dampaknya, bandingkan trade-off, lalu pilih. Angka di bawah adalah konsekuensi simulasi yang akan langsung diterapkan.</div>
+        <div className="event-options">{options.map(o=>{
+          const projected = projectChoice(player, o)
+          const scoreBefore = smartScore(player)
+          const scoreAfter = smartScore(projected)
+          const impacts = [['Finance',o.finance_delta],['Academic',o.academic_delta],['Social',o.social_delta],['Wellbeing',o.wellbeing_delta]].filter(([,v])=>v!==0)
+          return <button key={o.id} className={`event-option ${picked===o.id?'selected':''}`} disabled={!!picked||session.event_phase!=='voting'} onClick={()=>choose(o.id)}>
+            <div className="event-option-head"><strong>{o.label}</strong><span className={`money-delta ${o.balance_delta>0?'positive':o.balance_delta<0?'negative':'neutral'}`}>{moneyDelta(o.balance_delta)}</span></div>
+            <small>{o.description}</small>
+            <div className="option-preview"><span>Saldo sesudah pilihan</span><b>{rupiah(projected.balance)}</b></div>
+            <div className="impact-chips">{impacts.length?impacts.map(([name,value])=><span key={name} className={`impact-chip ${value>0?'positive':'negative'}`}>{name} {signed(value)}</span>):<span className="impact-chip neutral">Score tetap</span>}<span className={`impact-chip ${scoreAfter>scoreBefore?'positive':scoreAfter<scoreBefore?'negative':'neutral'}`}>Smart Score {scoreBefore} → {scoreAfter}</span></div>
+          </button>
+        })}</div>
+        {picked && session.event_phase==='voting' && <div className="success" style={{marginTop:16}}>Pilihanmu sudah terkunci. Tunggu host membuka consequence.</div>}
+        {picked && session.event_phase==='reveal' && selected && <div className="panel" style={{marginTop:16,padding:18}}><span className="eyebrow">CONSEQUENCE</span><h3>{selected.reveal_text}</h3><p>Ini bukan soal mencari opsi termurah, tetapi memahami apakah uang yang keluar sejalan dengan prioritasmu.</p></div>}
+      </section><aside className="panel span-4"><span className="eyebrow">YOUR STATUS</span><div className="money" style={{fontSize:'2.5rem'}}>{rupiah(player.balance)}</div><div className="tiny">Saldo saat ini</div><div className="smart-score-box"><span>Smart Score</span><b>{smartScore(player)}</b></div><ScoreRow player={player}/>{error&&<div className="error" style={{marginTop:16}}>{error}</div>}</aside></div>
     </main>
   }
 
@@ -197,6 +208,19 @@ export default function PlayPage() {
   return <Waiting title="Game sedang disiapkan" text="Tetap di halaman ini. Perubahan ronde akan muncul otomatis." player={player} />
 }
 
+function projectChoice(player, choice) {
+  return {
+    ...player,
+    balance: Number(player.balance || 0) + Number(choice.balance_delta || 0),
+    finance: clampScore(Number(player.finance || 0) + Number(choice.finance_delta || 0)),
+    academic: clampScore(Number(player.academic || 0) + Number(choice.academic_delta || 0)),
+    social: clampScore(Number(player.social || 0) + Number(choice.social_delta || 0)),
+    wellbeing: clampScore(Number(player.wellbeing || 0) + Number(choice.wellbeing_delta || 0))
+  }
+}
+
+function clampScore(value) { return Math.max(0, Math.min(100, value)) }
+function moneyDelta(value) { return value>0?`+${rupiah(value)}`:rupiah(value) }
 function Waiting({title,text,player}) { return <main className="shell"><div className="panel center" style={{maxWidth:680,margin:'12vh auto 0'}}><span className="eyebrow">YOU'RE IN</span><h1 style={{fontSize:'clamp(2.4rem,8vw,4.8rem)'}}>{title}</h1><p>{text}</p>{player?.balance!=null&&<><div className="money" style={{fontSize:'2.5rem'}}>{rupiah(player.balance)}</div><ScoreRow player={player}/></>}</div></main> }
 function ScoreRow({player}) { return <div className="score-row" style={{marginTop:16}}>{[['Finance',player.finance],['Academic',player.academic],['Social',player.social],['Wellbeing',player.wellbeing]].map(([k,v])=><div className="score-card" key={k}><b>{v}</b><span>{k}</span></div>)}</div> }
 function signed(v){ return v>0?`+${v}`:`${v}` }
