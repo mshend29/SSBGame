@@ -11,11 +11,24 @@ export default function ScreenPage(){
   const [participantCount,setParticipantCount]=useState(0)
   const [currentEvent,setCurrentEvent]=useState(null)
   const [choices,setChoices]=useState([])
+  const [code,setCode]=useState(DEFAULT_SESSION_CODE)
+  const [joinUrl,setJoinUrl]=useState('')
+  const [mounted,setMounted]=useState(false)
   const client=useMemo(()=>getPublicClient(),[])
-  const code=typeof window!=='undefined'?(new URLSearchParams(window.location.search).get('code')||DEFAULT_SESSION_CODE).toUpperCase():DEFAULT_SESSION_CODE
-  const joinUrl=typeof window!=='undefined'?`${window.location.origin}/play?code=${code}`:`/play?code=${code}`
 
-  useEffect(()=>{load();const t=setInterval(load,1500);return()=>clearInterval(t)},[])
+  useEffect(()=>{
+    const resolvedCode=(new URLSearchParams(window.location.search).get('code')||DEFAULT_SESSION_CODE).toUpperCase()
+    setCode(resolvedCode)
+    setJoinUrl(`${window.location.origin}/play?code=${resolvedCode}`)
+    setMounted(true)
+  },[])
+
+  useEffect(()=>{
+    if(!mounted)return
+    load()
+    const t=setInterval(load,1500)
+    return()=>clearInterval(t)
+  },[mounted,code])
 
   async function load(){
     const {data:s}=await client.from('game_sessions')
@@ -58,7 +71,11 @@ export default function ScreenPage(){
     </div>
 
     {(!session||session.stage==='lobby')&&<div className="screen-grid">
-      <section className="screen-card center"><div className="qr-wrap"><QRCodeSVG value={joinUrl} size={250}/></div><h2 style={{marginTop:20}}>Scan & Join</h2><p>{joinUrl}</p></section>
+      <section className="screen-card center">
+        <div className="qr-wrap">{joinUrl?<QRCodeSVG value={joinUrl} size={250}/>:<div className="qr-placeholder">Menyiapkan QR...</div>}</div>
+        <h2 style={{marginTop:20}}>Scan & Join</h2>
+        <p>{joinUrl||`/play?code=${code}`}</p>
+      </section>
       <section className="screen-card center"><span className="eyebrow">CONNECTED</span><div className="screen-metric">{participantCount}</div><p>mahasiswa sudah masuk</p><div className="pill" style={{display:'inline-block'}}>CODE {code}</div></section>
     </div>}
 
