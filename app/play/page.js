@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { budgetOptions, DEFAULT_SESSION_CODE, moneyPersonality, rupiah, smartScore } from '../../lib/game'
+import { budgetOptions, moneyPersonality, rupiah, smartScore } from '../../lib/game'
 import { getPublicClient } from '../../lib/supabase'
 
 const STORAGE_KEY = 'ssb-player-v1'
@@ -14,7 +14,7 @@ export default function PlayPage() {
   const [options, setOptions] = useState([])
   const [picked, setPicked] = useState(null)
   const [budget, setBudget] = useState({})
-  const [form, setForm] = useState({ name: '', nim: '', faculty: '', code: DEFAULT_SESSION_CODE })
+  const [form, setForm] = useState({ name: '', nim: '', faculty: '', code: '' })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -26,9 +26,9 @@ export default function PlayPage() {
     if (saved) {
       try { setPlayer(JSON.parse(saved)) } catch {}
     }
-    const code = new URLSearchParams(window.location.search).get('code')
-    if (code) setForm(v => ({ ...v, code: code.toUpperCase() }))
-    loadPublic(code || DEFAULT_SESSION_CODE)
+    const requestedCode = (new URLSearchParams(window.location.search).get('code') || '').toUpperCase()
+    if (requestedCode) setForm(v => ({ ...v, code: requestedCode }))
+    loadPublic(requestedCode)
   }, [])
 
   useEffect(() => {
@@ -40,7 +40,10 @@ export default function PlayPage() {
         .select('id,code,title,stage,event_phase,current_event_order,starting_balance')
         .eq('id', session.id)
         .maybeSingle()
-      if (!cancelled && data) setSession(data)
+      if (!cancelled && data) {
+        setSession(data)
+        setForm(v => ({ ...v, code: data.code }))
+      }
     }
 
     const channel = publicClient.channel(`session:${session.id}`)
@@ -71,20 +74,37 @@ export default function PlayPage() {
     loadEvent(session.current_event_order)
   }, [session?.stage, session?.current_event_order, session?.event_phase])
 
-  async function loadPublic(code) {
+  async function loadPublic(code = '') {
     setLoading(true); setError('')
+    const normalized = code.trim().toUpperCase()
+    let sessionQuery = publicClient.from('game_sessions')
+      .select('id,code,title,stage,event_phase,current_event_order,starting_balance,created_at')
+
+    sessionQuery = normalized
+      ? sessionQuery.eq('code', normalized)
+      : sessionQuery.order('created_at', { ascending: false }).limit(1)
+
     const [{ data: s, error: se }, { data: f }] = await Promise.all([
-      publicClient.from('game_sessions').select('id,code,title,stage,event_phase,current_event_order,starting_balance').eq('code', code.toUpperCase()).maybeSingle(),
+      sessionQuery.maybeSingle(),
       publicClient.from('faculties').select('name').eq('is_active', true).order('name')
     ])
-    if (se || !s) setError('Sesi game belum tersedia. Periksa kode sesi.')
-    setSession(s || null); setFaculties(f || []); setLoading(false)
+
+    if (se || !s) {
+      setError('Sesi game belum tersedia. Periksa kode sesi.')
+      setSession(null)
+    } else {
+      setSession(s)
+      setForm(v => ({ ...v, code: s.code }))
+    }
+    setFaculties(f || [])
+    setLoading(false)
   }
 
   async function join(e) {
     e.preventDefault(); setError('')
     const name = form.name.trim(); const nim = form.nim.trim(); const faculty = form.faculty.trim()
     if (!name || !nim || !faculty || !session) return setError('Nama, NIM, dan fakultas wajib diisi.')
+    if (form.code.trim().toUpperCase() !== session.code) return setError('Kode sesi berubah. Tekan keluar dari kolom kode atau masukkan ulang kode yang aktif.')
     const id = crypto.randomUUID(); const token = crypto.randomUUID()
     const { error: insertError } = await publicClient.from('players').insert({
       id, session_id: session.id, name, nim, faculty, access_token: token
@@ -162,11 +182,11 @@ export default function PlayPage() {
         <section className="panel span-7"><span className="eyebrow">30 DAYS SURVIVAL</span><h1 style={{fontSize:'clamp(2.5rem,8vw,5rem)'}}>Uangmu.<br/>Pilihanmu.</h1><p>Masuk dengan identitas kampusmu. NIM hanya dipakai untuk mencegah peserta ganda dan tidak ditampilkan di leaderboard.</p></section>
         <form className="panel span-5" onSubmit={join}>
           <h2>Masuk ke game</h2>{error && <div className="error">{error}</div>}
-          <div className="field"><label>Kode sesi</label><input className="input" value={form.code} onChange={e=>setForm({...form,code:e.target.value.toUpperCase()})} onBlur={()=>loadPublic(form.code)} /></div>
+          <div className="field"><label>Kode sesi</label><input className="input" value={form.code} onChange={e=>{const next=e.target.value.toUpperCase();setForm({...form,code:next});if(next!==session?.code)setSession(null)}} onBlur={()=>loadPublic(form.code)} /></div>
           <div className="field"><label>Nama / nickname</label><input className="input" maxLength={40} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Nama yang tampil di leaderboard" /></div>
           <div className="field"><label>NIM</label><input className="input" maxLength={40} value={form.nim} onChange={e=>setForm({...form,nim:e.target.value})} placeholder="Nomor induk mahasiswa" /></div>
           <div className="field"><label>Fakultas</label><input className="input" list="faculty-list" maxLength={100} value={form.faculty} onChange={e=>setForm({...form,faculty:e.target.value})} placeholder="Contoh: Fakultas Teknologi Informasi dan Industri" /><datalist id="faculty-list">{faculties.map(f=><option key={f.name} value={f.name}/>)}</datalist></div>
-          <button className="btn btn-primary full" disabled={!session}>Mulai Game →</button>
+          <button className="btn btn-primary full" disabled={!session||form.code.trim().toUpperCase()!==session?.code}>Mulai Game →</button>
         </form>
       </div>
     </main>
