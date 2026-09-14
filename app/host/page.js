@@ -1,13 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { DEFAULT_SESSION_CODE } from '../../lib/game'
 import { getHostClient } from '../../lib/supabase'
 
 export default function HostPage(){
   const [secret,setSecret]=useState('')
-  const [code,setCode]=useState(DEFAULT_SESSION_CODE)
-  const [codeDraft,setCodeDraft]=useState(DEFAULT_SESSION_CODE)
+  const [codeDraft,setCodeDraft]=useState('')
   const [session,setSession]=useState(null)
   const [stats,setStats]=useState(null)
   const [error,setError]=useState('')
@@ -16,14 +14,20 @@ export default function HostPage(){
   const client=useMemo(()=>secret?getHostClient(secret):null,[secret])
 
   useEffect(()=>{ const s=sessionStorage.getItem('ssb-host-secret'); if(s)setSecret(s) },[])
-  useEffect(()=>{ if(!client)return; load(); const t=setInterval(load,2000); return()=>clearInterval(t) },[client,code])
+  useEffect(()=>{ if(!client)return; load(); const t=setInterval(load,2000); return()=>clearInterval(t) },[client])
   useEffect(()=>{ if(session?.code)setCodeDraft(session.code) },[session?.code])
 
   async function load(){
     if(!client)return
-    const {data:s,error:e}=await client.from('game_sessions').select('id,code,title,stage,event_phase,current_event_order,starting_balance').eq('code',code.toUpperCase()).maybeSingle()
-    if(e){setError(e.message);return} setSession(s)
-    if(!s)return
+    const {data:s,error:e}=await client.from('game_sessions')
+      .select('id,code,title,stage,event_phase,current_event_order,starting_balance,created_at')
+      .order('created_at',{ascending:false})
+      .limit(1)
+      .maybeSingle()
+    if(e){setError(e.message);return}
+    setSession(s||null)
+    if(!s){setStats(null);return}
+
     const [{count:players},{count:budgeted},{data:events},{data:choices}]=await Promise.all([
       client.from('public_scores').select('player_id',{count:'exact',head:true}).eq('session_id',s.id),
       client.from('public_scores').select('player_id',{count:'exact',head:true}).eq('session_id',s.id).eq('budget_confirmed',true),
@@ -70,7 +74,6 @@ export default function HostPage(){
     if(e){setError(e.message);setBusy(false);return}
     if(!data?.length){setError('Host secret tidak cocok atau kode sesi tidak dapat diubah.');setBusy(false);return}
     const newCode=data[0].code
-    setCode(newCode)
     setCodeDraft(newCode)
     setSession(prev=>prev?{...prev,code:newCode}:prev)
     setNotice(`Kode sesi berhasil diubah menjadi ${newCode}. QR pada layar presentasi akan mengikuti kode baru.`)
@@ -94,13 +97,13 @@ export default function HostPage(){
   const allBudgeted=(stats?.players||0)>0 && (stats?.budgeted||0)===(stats?.players||0)
 
   return <main className="shell">
-    <div className="topbar"><div className="brand"><span className="live-dot"/>Host Dashboard</div><span className="pill">{session?.code||code}</span></div>
+    <div className="topbar"><div className="brand"><span className="live-dot"/>Host Dashboard</div><span className="pill">{session?.code||'—'}</span></div>
     {error&&<div className="error">{error}</div>}
     {notice&&<div className="success">{notice}</div>}
 
     <div className="grid">
       <section className="panel span-8"><span className="eyebrow">SESSION CONTROL</span><h2>{session?.title||'Session not found'}</h2><p>Stage: <b>{session?.stage}</b> · Phase: <b>{session?.event_phase}</b> · Event: <b>{session?.current_event_order||'—'}</b></p>
-        <div className="host-controls"><button className="btn btn-secondary" disabled={busy} onClick={()=>update({stage:'budgeting',event_phase:'idle',current_event_order:null})}>1. Open Budgeting</button><button className="btn btn-primary" disabled={busy||!allBudgeted} onClick={startRoundOne}>2. Start Round 1</button><button className="btn btn-ghost" disabled={busy||session?.stage!=='game'} onClick={()=>update({event_phase:'reveal'})}>Reveal Consequence</button><button className="btn btn-primary" disabled={busy||session?.stage!=='game'} onClick={nextEvent}>Next Round →</button><button className="btn btn-danger" disabled={busy} onClick={()=>update({stage:'finished',event_phase:'idle'})}>Finish Game</button><button className="btn btn-ghost" onClick={()=>{sessionStorage.removeItem('ssb-host-secret');setSecret('')}}>Lock Host</button></div>
+        <div className="host-controls"><button className="btn btn-secondary" disabled={busy||!session} onClick={()=>update({stage:'budgeting',event_phase:'idle',current_event_order:null})}>1. Open Budgeting</button><button className="btn btn-primary" disabled={busy||!allBudgeted} onClick={startRoundOne}>2. Start Round 1</button><button className="btn btn-ghost" disabled={busy||session?.stage!=='game'} onClick={()=>update({event_phase:'reveal'})}>Reveal Consequence</button><button className="btn btn-primary" disabled={busy||session?.stage!=='game'} onClick={nextEvent}>Next Round →</button><button className="btn btn-danger" disabled={busy||!session} onClick={()=>update({stage:'finished',event_phase:'idle'})}>Finish Game</button><button className="btn btn-ghost" onClick={()=>{sessionStorage.removeItem('ssb-host-secret');setSecret('')}}>Lock Host</button></div>
         {!allBudgeted&&<p className="tiny" style={{marginTop:14}}>Round 1 baru dapat dimulai setelah semua peserta mengunci budget.</p>}
       </section>
 
