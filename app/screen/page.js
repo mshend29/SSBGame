@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { DEFAULT_SESSION_CODE, rupiah } from '../../lib/game'
+import { rupiah } from '../../lib/game'
 import { getPublicClient } from '../../lib/supabase'
 
 export default function ScreenPage(){
@@ -11,15 +11,14 @@ export default function ScreenPage(){
   const [participantCount,setParticipantCount]=useState(0)
   const [currentEvent,setCurrentEvent]=useState(null)
   const [choices,setChoices]=useState([])
-  const [code,setCode]=useState(DEFAULT_SESSION_CODE)
+  const [code,setCode]=useState('')
   const [joinUrl,setJoinUrl]=useState('')
   const [mounted,setMounted]=useState(false)
   const client=useMemo(()=>getPublicClient(),[])
 
   useEffect(()=>{
-    const resolvedCode=(new URLSearchParams(window.location.search).get('code')||DEFAULT_SESSION_CODE).toUpperCase()
-    setCode(resolvedCode)
-    setJoinUrl(`${window.location.origin}/play?code=${resolvedCode}`)
+    const requestedCode=(new URLSearchParams(window.location.search).get('code')||'').toUpperCase()
+    setCode(requestedCode)
     setMounted(true)
   },[])
 
@@ -30,19 +29,38 @@ export default function ScreenPage(){
     return()=>clearInterval(t)
   },[mounted,code,session?.id])
 
+  async function findSession(){
+    const fields='id,code,title,stage,event_phase,current_event_order,created_at'
+
+    if(session?.id){
+      const {data}=await client.from('game_sessions').select(fields).eq('id',session.id).maybeSingle()
+      if(data)return data
+    }
+
+    if(code){
+      const {data}=await client.from('game_sessions').select(fields).eq('code',code).maybeSingle()
+      if(data)return data
+    }
+
+    const {data}=await client.from('game_sessions')
+      .select(fields)
+      .order('created_at',{ascending:false})
+      .limit(1)
+      .maybeSingle()
+    return data||null
+  }
+
   async function load(){
-    let query=client.from('game_sessions').select('id,code,title,stage,event_phase,current_event_order')
-    query=session?.id?query.eq('id',session.id):query.eq('code',code)
-    const {data:s}=await query.maybeSingle()
+    const s=await findSession()
     if(!s)return
 
     if(s.code!==code){
       setCode(s.code)
-      setJoinUrl(`${window.location.origin}/play?code=${s.code}`)
       const url=new URL(window.location.href)
       url.searchParams.set('code',s.code)
       window.history.replaceState(null,'',url)
     }
+    setJoinUrl(`${window.location.origin}/play?code=${s.code}`)
     setSession(s)
 
     const [{data:leaders,count},{data:vote},{data:eventData}]=await Promise.all([
@@ -82,9 +100,9 @@ export default function ScreenPage(){
       <section className="screen-card center">
         <div className="qr-wrap">{joinUrl?<QRCodeSVG value={joinUrl} size={250}/>:<div className="qr-placeholder">Menyiapkan QR...</div>}</div>
         <h2 style={{marginTop:20}}>Scan & Join</h2>
-        <p>{joinUrl||`/play?code=${code}`}</p>
+        <p>{joinUrl||'Menyiapkan kode sesi aktif...'}</p>
       </section>
-      <section className="screen-card center"><span className="eyebrow">CONNECTED</span><div className="screen-metric">{participantCount}</div><p>mahasiswa sudah masuk</p><div className="pill" style={{display:'inline-block'}}>CODE {code}</div></section>
+      <section className="screen-card center"><span className="eyebrow">CONNECTED</span><div className="screen-metric">{participantCount}</div><p>mahasiswa sudah masuk</p><div className="pill" style={{display:'inline-block'}}>CODE {code||'—'}</div></section>
     </div>}
 
     {session?.stage==='budgeting'&&<section className="screen-card center"><span className="eyebrow">BUILD YOUR BUDGET</span><div className="screen-metric">{participantCount}</div><h2>Atur Rp2.500.000 untuk 30 hari.</h2><p>Jangan lihat pilihan temanmu. Ini tentang kebiasaan uangmu sendiri.</p></section>}
