@@ -87,7 +87,18 @@ export default function HostPage(){
     setBusy(true);setError('');setNotice('')
     const {error:e}=await client.rpc('host_reset_session',{p_session_id:session.id})
     if(e){setError(e.message);setBusy(false);return}
-    setNotice('Session berhasil di-reset. Semua data peserta dan jawaban sudah dibersihkan, dan sesi kembali ke lobby.')
+
+    const {count:remaining,error:verifyError}=await client.from('public_scores')
+      .select('player_id',{count:'exact',head:true})
+      .eq('session_id',session.id)
+
+    if(verifyError){
+      setError(`Reset dijalankan, tetapi verifikasi gagal: ${verifyError.message}`)
+    }else if((remaining||0)>0){
+      setError(`Reset belum tuntas. Masih ada ${remaining} peserta tersimpan.`)
+    }else{
+      setNotice('Session berhasil di-reset. Semua data peserta dan jawaban sudah dibersihkan, dan sesi kembali ke lobby.')
+    }
     await load()
     setBusy(false)
   }
@@ -113,6 +124,7 @@ export default function HostPage(){
         <span className="eyebrow">SESSION SETTINGS</span>
         <h2>Kode Join Mahasiswa</h2>
         <p>Kode ini dipakai mahasiswa saat masuk ke game. Gunakan 4–12 huruf/angka tanpa spasi.</p>
+        <p className="tiny">Mengganti kode hanya mengganti akses join; data peserta lama tetap ada sampai kamu menekan Reset Session.</p>
         <div className="field"><label>Session code</label><input className="input" value={codeDraft} maxLength={12} onChange={e=>setCodeDraft(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''))}/></div>
         <button className="btn btn-secondary" disabled={busy||!session||codeDraft===session?.code} onClick={saveSessionCode}>Save Session Code</button>
       </section>
