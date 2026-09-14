@@ -101,7 +101,16 @@ export default function PlayPage() {
     const { data, error: pe } = await playerClient.from('players')
       .select('id,name,nim,faculty,balance,finance,academic,social,wellbeing,budget_json,budget_total,budget_confirmed')
       .eq('id', player.id).maybeSingle()
-    if (!pe && data) setPlayer(prev => ({ ...prev, ...data }))
+    if (!pe && data) {
+      setPlayer(prev => ({ ...prev, ...data }))
+    } else if (!pe && !data) {
+      localStorage.removeItem(STORAGE_KEY)
+      setPlayer(null)
+      setBudget({})
+      setPicked(null)
+      setError('Session telah di-reset oleh host. Silakan masuk kembali untuk sesi baru.')
+      if (session?.code) setForm(v => ({ ...v, code: session.code }))
+    }
   }
 
   async function loadEvent(order) {
