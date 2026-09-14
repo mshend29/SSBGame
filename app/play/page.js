@@ -33,12 +33,35 @@ export default function PlayPage() {
 
   useEffect(() => {
     if (!session?.id) return
+
+    let cancelled = false
+    const refreshSession = async () => {
+      const { data } = await publicClient.from('game_sessions')
+        .select('id,code,title,stage,event_phase,current_event_order,starting_balance')
+        .eq('id', session.id)
+        .maybeSingle()
+      if (!cancelled && data) setSession(data)
+    }
+
     const channel = publicClient.channel(`session:${session.id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_sessions', filter: `id=eq.${session.id}` }, payload => {
-        setSession(payload.new)
-      }).subscribe()
-    return () => { publicClient.removeChannel(channel) }
-  }, [session?.id])
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_sessions', filter: `id=eq.${session.id}` }, () => {
+        refreshSession()
+      })
+      .subscribe()
+
+    // Realtime is the fast path. Polling is an intentional fallback for event Wi-Fi,
+    // sleeping mobile browsers, or a dropped websocket connection.
+    const poll = setInterval(refreshSession, 1200)
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshSession() }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      cancelled = true
+      clearInterval(poll)
+      document.removeEventListener('visibilitychange', onVisible)
+      publicClient.removeChannel(channel)
+    }
+  }, [session?.id, publicClient])
 
   useEffect(() => {
     if (!playerClient || !player?.id) return
@@ -134,7 +157,7 @@ export default function PlayPage() {
           <div className="field"><label>Kode sesi</label><input className="input" value={form.code} onChange={e=>setForm({...form,code:e.target.value.toUpperCase()})} onBlur={()=>loadPublic(form.code)} /></div>
           <div className="field"><label>Nama / nickname</label><input className="input" maxLength={40} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Nama yang tampil di leaderboard" /></div>
           <div className="field"><label>NIM</label><input className="input" maxLength={40} value={form.nim} onChange={e=>setForm({...form,nim:e.target.value})} placeholder="Nomor induk mahasiswa" /></div>
-          <div className="field"><label>Fakultas</label><input className="input" list="faculty-list" maxLength={100} value={form.faculty} onChange={e=>setForm({...form,faculty:e.target.value})} placeholder="Contoh: Fakultas Teknik" /><datalist id="faculty-list">{faculties.map(f=><option key={f.name} value={f.name}/>)}</datalist></div>
+          <div className="field"><label>Fakultas</label><input className="input" list="faculty-list" maxLength={100} value={form.faculty} onChange={e=>setForm({...form,faculty:e.target.value})} placeholder="Contoh: Fakultas Teknologi Informasi dan Industri" /><datalist id="faculty-list">{faculties.map(f=><option key={f.name} value={f.name}/>)}</datalist></div>
           <button className="btn btn-primary full" disabled={!session}>Mulai Game →</button>
         </form>
       </div>
