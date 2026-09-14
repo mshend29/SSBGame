@@ -28,13 +28,21 @@ export default function ScreenPage(){
     load()
     const t=setInterval(load,1500)
     return()=>clearInterval(t)
-  },[mounted,code])
+  },[mounted,code,session?.id])
 
   async function load(){
-    const {data:s}=await client.from('game_sessions')
-      .select('id,code,title,stage,event_phase,current_event_order')
-      .eq('code',code).maybeSingle()
+    let query=client.from('game_sessions').select('id,code,title,stage,event_phase,current_event_order')
+    query=session?.id?query.eq('id',session.id):query.eq('code',code)
+    const {data:s}=await query.maybeSingle()
     if(!s)return
+
+    if(s.code!==code){
+      setCode(s.code)
+      setJoinUrl(`${window.location.origin}/play?code=${s.code}`)
+      const url=new URL(window.location.href)
+      url.searchParams.set('code',s.code)
+      window.history.replaceState(null,'',url)
+    }
     setSession(s)
 
     const [{data:leaders,count},{data:vote},{data:eventData}]=await Promise.all([
