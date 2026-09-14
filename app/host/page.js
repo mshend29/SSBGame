@@ -66,9 +66,10 @@ export default function HostPage(){
       return
     }
     setBusy(true);setError('');setNotice('')
-    const {data,error:e}=await client.rpc('host_set_session_code',{p_session_id:session.id,p_code:normalized})
+    const {data,error:e}=await client.from('game_sessions').update({code:normalized}).eq('id',session.id).select('code')
     if(e){setError(e.message);setBusy(false);return}
-    const newCode=data||normalized
+    if(!data?.length){setError('Host secret tidak cocok atau kode sesi tidak dapat diubah.');setBusy(false);return}
+    const newCode=data[0].code
     setCode(newCode)
     setCodeDraft(newCode)
     setSession(prev=>prev?{...prev,code:newCode}:prev)
