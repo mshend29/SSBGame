@@ -89,20 +89,26 @@ export default function ScreenPage(){
     return {...choice,votes,pct:totalVotes?Math.round(votes/totalVotes*100):0}
   })
   const topVotes=Math.max(0,...mergedChoices.map(c=>c.votes))
+  const titleClass=session?.stage==='game'?'screen-heading-compact':(!session||session.stage==='lobby')?'screen-lobby-heading':''
 
   return <main className="screen-shell">
     <div className="screen-title">
       <span className="eyebrow">SMART STUDENT BUDGET · LIVE</span>
-      <h1 className={session?.stage==='game'?'screen-heading-compact':''}>{session?.title||'Smart Student Budget'}</h1>
+      <h1 className={titleClass}>{session?.title||'Smart Student Budget'}</h1>
     </div>
 
-    {(!session||session.stage==='lobby')&&<div className="screen-grid">
-      <section className="screen-card center">
-        <div className="qr-wrap">{joinUrl?<QRCodeSVG value={joinUrl} size={250}/>:<div className="qr-placeholder">Menyiapkan QR...</div>}</div>
-        <h2 style={{marginTop:20}}>Scan & Join</h2>
-        <p>{joinUrl||'Menyiapkan kode sesi aktif...'}</p>
+    {(!session||session.stage==='lobby')&&<div className="screen-lobby">
+      <section className="screen-card screen-lobby-qr-card center">
+        <div className="qr-wrap">{joinUrl?<QRCodeSVG value={joinUrl} size={420}/>:<div className="qr-placeholder">Menyiapkan QR...</div>}</div>
+        <h2>Scan & Join</h2>
+        <p className="screen-lobby-url">{joinUrl||'Menyiapkan kode sesi aktif...'}</p>
       </section>
-      <section className="screen-card center"><span className="eyebrow">CONNECTED</span><div className="screen-metric">{participantCount}</div><p>mahasiswa sudah masuk</p><div className="pill" style={{display:'inline-block'}}>CODE {code||'—'}</div></section>
+      <section className="screen-lobby-connected">
+        <span className="eyebrow">CONNECTED</span>
+        <div className="screen-lobby-count">{participantCount}</div>
+        <p>mahasiswa sudah masuk</p>
+        <div className="pill">CODE {code||'—'}</div>
+      </section>
     </div>}
 
     {session?.stage==='budgeting'&&<section className="screen-card center"><span className="eyebrow">BUILD YOUR BUDGET</span><div className="screen-metric">{participantCount}</div><h2>Atur Rp2.500.000 untuk 30 hari.</h2><p>Jangan lihat pilihan temanmu. Ini tentang kebiasaan uangmu sendiri.</p></section>}
