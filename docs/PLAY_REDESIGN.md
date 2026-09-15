@@ -40,20 +40,20 @@ bukan:
 
 # Urutan Implementasi
 
-## 1. Join Screen — ACTIVE
+## 1. Join Screen — DONE
 
 Tujuan: halaman pertama harus terasa seperti **start screen sebuah game**, bukan form login.
 
 ### Scope
 
-- [ ] Hero/start screen baru
-- [ ] Session status kecil dan jelas
-- [ ] Form identitas dibuat seperti player registration panel
-- [ ] CTA utama `JOIN GAME`
-- [ ] Visual cue 30-day challenge
-- [ ] Mobile layout tetap nyaman
-- [ ] Error/session invalid tetap terbaca jelas
-- [ ] Tidak mengubah logic join, NIM uniqueness, faculty, atau session lookup
+- [x] Hero/start screen baru
+- [x] Session status kecil dan jelas
+- [x] Form identitas dibuat seperti player registration panel
+- [x] CTA utama `JOIN GAME`
+- [x] Visual cue 30-day challenge
+- [x] Mobile layout tetap nyaman
+- [x] Error/session invalid tetap terbaca jelas
+- [x] Tidak mengubah logic join, NIM uniqueness, faculty, atau session lookup
 
 ### Acceptance criteria
 
@@ -62,7 +62,18 @@ Tujuan: halaman pertama harus terasa seperti **start screen sebuah game**, bukan
 - Tombol join tetap disabled jika session belum valid.
 - Nama, NIM, fakultas, dan session code tetap bekerja sama seperti sebelumnya.
 - Tidak ada horizontal overflow di mobile.
-- `npm run build` lulus.
+- Production build lulus.
+
+### Implementasi
+
+- Hero card diubah menjadi start screen tanpa kesan dashboard card.
+- Background memakai grid/ambient glow ringan untuk memberi nuansa game.
+- Angka `30` menjadi elemen visual besar sebagai cue 30-day challenge.
+- Form menjadi player registration terminal.
+- Session valid menampilkan `SESSION <CODE> READY`.
+- CTA menjadi `JOIN GAME`.
+- Copy diperjelas bahwa simulasi memengaruhi uang, akademik, relasi, dan wellbeing.
+- Logic join dan Supabase tidak diubah.
 
 ---
 
@@ -183,5 +194,7 @@ Agar scope tidak melebar, hal berikut **ditunda** sampai semua item di atas sele
 ### 2026-09-15
 
 - Roadmap dibuat.
-- Fokus pertama ditetapkan: **Join Screen**.
-- Baseline: logic game production sudah berjalan; perubahan berikutnya visual-only kecuali ada bug yang ditemukan saat implementasi.
+- Step 1 **Join Screen** selesai.
+- Production deployment untuk commit `f23b17ac1cfdb7382b3e4be48e8b8bb41571cfad` berstatus `READY`.
+- Build log tidak menunjukkan error.
+- Step 2 **Lobby / Waiting Room** belum dimulai dan tetap `QUEUED` sampai review Step 1 selesai.
