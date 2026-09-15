@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { budgetOptions, moneyPersonality, rupiah, smartScore } from '../../lib/game'
+import { moneyPersonality, rupiah, smartScore } from '../../lib/game'
 import { getPublicClient } from '../../lib/supabase'
 
 const STORAGE_KEY = 'ssb-player-v1'
@@ -14,6 +14,7 @@ export default function PlayPage() {
   const [options, setOptions] = useState([])
   const [picked, setPicked] = useState(null)
   const [budget, setBudget] = useState({})
+  const [budgetOptions, setBudgetOptions] = useState([])
   const [form, setForm] = useState({ name: '', nim: '', faculty: '', code: '' })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -74,6 +75,11 @@ export default function PlayPage() {
     loadEvent(session.current_event_order)
   }, [session?.stage, session?.current_event_order, session?.event_phase])
 
+  useEffect(() => {
+    if (!session?.id || session.stage !== 'budgeting' || player?.budget_confirmed) return
+    loadBudgetConfig(session.id)
+  }, [session?.id, session?.stage, player?.budget_confirmed])
+
   async function loadPublic(code = '') {
     setLoading(true); setError('')
     const normalized = code.trim().toUpperCase()
@@ -92,12 +98,47 @@ export default function PlayPage() {
     if (se || !s) {
       setError('Sesi game belum tersedia. Periksa kode sesi.')
       setSession(null)
+      setBudgetOptions([])
     } else {
       setSession(s)
       setForm(v => ({ ...v, code: s.code }))
+      await loadBudgetConfig(s.id)
     }
     setFaculties(f || [])
     setLoading(false)
+  }
+
+  async function loadBudgetConfig(sessionId) {
+    const { data: categories, error: categoryError } = await publicClient.from('budget_categories')
+      .select('id,category_order,category_key,label,icon')
+      .eq('session_id', sessionId)
+      .order('category_order')
+    if (categoryError) {
+      setBudgetOptions([])
+      setError(categoryError.message)
+      return
+    }
+
+    let optionRows = []
+    if (categories?.length) {
+      const { data, error: optionError } = await publicClient.from('budget_options')
+        .select('id,category_id,option_order,amount,finance_delta,academic_delta,social_delta,wellbeing_delta')
+        .in('category_id', categories.map(category => category.id))
+        .order('option_order')
+      if (optionError) {
+        setBudgetOptions([])
+        setError(optionError.message)
+        return
+      }
+      optionRows = data || []
+    }
+
+    setBudgetOptions((categories || []).map(category => ({
+      key: category.category_key,
+      label: category.label,
+      icon: category.icon,
+      options: optionRows.filter(option => option.category_id === category.id).sort((a,b) => a.option_order - b.option_order)
+    })))
   }
 
   async function join(e) {
@@ -151,7 +192,7 @@ export default function PlayPage() {
 
   function chooseBudget(key, value) { setBudget(prev => ({ ...prev, [key]: value })) }
   const budgetTotal = Object.values(budget).reduce((a, b) => a + Number(b || 0), 0)
-  const completeBudget = budgetOptions.every(item => budget[item.key])
+  const completeBudget = budgetOptions.length > 0 && budgetOptions.every(item => Object.prototype.hasOwnProperty.call(budget, item.key))
 
   async function confirmBudget() {
     if (!completeBudget) return setError('Pilih nominal untuk semua kategori.')
@@ -205,7 +246,7 @@ export default function PlayPage() {
   if (session.stage === 'budgeting' && !player.budget_confirmed) return (
     <main className="shell"><div className="topbar"><div className="brand">💸 Smart Student Budget</div><span className="pill">BUILD YOUR BUDGET</span></div>
       <div className="grid"><section className="panel span-7"><span className="eyebrow">SALDO AWAL</span><div className="money">{rupiah(session.starting_balance)}</div><p>Atur rencana pengeluaran 30 harimu. Tidak ada jawaban sempurna—setiap pilihan punya trade-off.</p>
-        <div className="budget-list">{budgetOptions.map(item=><div className="budget-item" key={item.key}><div className="budget-title"><span>{item.icon} {item.label}</span><span>{budget[item.key]?rupiah(budget[item.key]):'—'}</span></div><div className="choice-grid">{item.options.map(value=><button type="button" key={value} className={`choice ${budget[item.key]===value?'active':''}`} onClick={()=>chooseBudget(item.key,value)}>{rupiah(value)}</button>)}</div></div>)}</div>
+        {budgetOptions.length===0?<div className="error">Konfigurasi budgeting belum tersedia.</div>:<div className="budget-list">{budgetOptions.map(item=><div className="budget-item" key={item.key}><div className="budget-title"><span>{item.icon} {item.label}</span><span>{Object.prototype.hasOwnProperty.call(budget,item.key)?rupiah(budget[item.key]):'—'}</span></div><div className="choice-grid">{item.options.map(option=>{const value=Number(option.amount);return <button type="button" key={option.id||`${item.key}-${value}`} className={`choice ${budget[item.key]===value?'active':''}`} onClick={()=>chooseBudget(item.key,value)}>{rupiah(value)}</button>})}</div></div>)}</div>}
       </section><aside className="panel span-5"><span className="eyebrow">RENCANA BULANAN</span><div className="money" style={{fontSize:'2.6rem'}}>{rupiah(budgetTotal)}</div><p>Sisa setelah alokasi: <b style={{color:'white'}}>{rupiah(session.starting_balance-budgetTotal)}</b></p>{error&&<div className="error">{error}</div>}<button className="btn btn-primary full" disabled={!completeBudget||budgetTotal>session.starting_balance} onClick={confirmBudget}>Kunci Budget</button></aside></div>
     </main>
   )
