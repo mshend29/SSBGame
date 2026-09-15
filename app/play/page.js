@@ -175,22 +175,28 @@ export default function PlayPage() {
 
   if (loading) return <main className="shell"><div className="panel">Memuat sesi...</div></main>
 
-  if (!player) return (
-    <main className="shell">
-      <div className="topbar"><div className="brand">💸 Smart Student Budget</div><span className="pill">JOIN GAME</span></div>
-      <div className="grid">
-        <section className="panel span-7"><span className="eyebrow">30 DAYS SURVIVAL</span><h1 style={{fontSize:'clamp(2.5rem,8vw,5rem)'}}>Uangmu.<br/>Pilihanmu.</h1><p>Masuk dengan identitas kampusmu. NIM hanya dipakai untuk mencegah peserta ganda dan tidak ditampilkan di leaderboard.</p></section>
-        <form className="panel span-5" onSubmit={join}>
-          <h2>Masuk ke game</h2>{error && <div className="error">{error}</div>}
-          <div className="field"><label>Kode sesi</label><input className="input" value={form.code} onChange={e=>{const next=e.target.value.toUpperCase();setForm({...form,code:next});if(next!==session?.code)setSession(null)}} onBlur={()=>loadPublic(form.code)} /></div>
-          <div className="field"><label>Nama / nickname</label><input className="input" maxLength={40} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Nama yang tampil di leaderboard" /></div>
-          <div className="field"><label>NIM</label><input className="input" maxLength={40} value={form.nim} onChange={e=>setForm({...form,nim:e.target.value})} placeholder="Nomor induk mahasiswa" /></div>
-          <div className="field"><label>Fakultas</label><input className="input" list="faculty-list" maxLength={100} value={form.faculty} onChange={e=>setForm({...form,faculty:e.target.value})} placeholder="Contoh: Fakultas Teknologi Informasi dan Industri" /><datalist id="faculty-list">{faculties.map(f=><option key={f.name} value={f.name}/>)}</datalist></div>
-          <button className="btn btn-primary full" disabled={!session||form.code.trim().toUpperCase()!==session?.code}>Mulai Game →</button>
-        </form>
-      </div>
-    </main>
-  )
+  if (!player) {
+    const sessionReady = !!session && form.code.trim().toUpperCase() === session.code
+    return (
+      <main className="shell">
+        <div className="topbar"><div className="brand">💸 Smart Student Budget</div><span className="pill">JOIN GAME</span></div>
+        <div className="grid">
+          <section className="panel span-7"><span className="eyebrow">30 DAYS SURVIVAL</span><h1 style={{fontSize:'clamp(2.5rem,8vw,5rem)'}}>Uangmu.<br/>Pilihanmu.</h1><p>Masuk dengan identitas kampusmu. Kamu akan menjalani simulasi 30 hari dan menghadapi keputusan yang memengaruhi uang, akademik, relasi, dan wellbeing.</p></section>
+          <form className="panel span-5" onSubmit={join}>
+            <h2>Siapkan pemainmu</h2>
+            {error && <div className="error">{error}</div>}
+            {sessionReady && <div className="success">● SESSION {session.code} READY</div>}
+            <div className="field"><label>Kode sesi</label><input className="input" value={form.code} onChange={e=>{const next=e.target.value.toUpperCase();setForm({...form,code:next});if(next!==session?.code)setSession(null)}} onBlur={()=>loadPublic(form.code)} /></div>
+            <div className="field"><label>Nama / nickname</label><input className="input" maxLength={40} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Nama yang tampil di leaderboard" /></div>
+            <div className="field"><label>NIM</label><input className="input" maxLength={40} value={form.nim} onChange={e=>setForm({...form,nim:e.target.value})} placeholder="Nomor induk mahasiswa" /></div>
+            <div className="field"><label>Fakultas</label><input className="input" list="faculty-list" maxLength={100} value={form.faculty} onChange={e=>setForm({...form,faculty:e.target.value})} placeholder="Contoh: Fakultas Teknologi Informasi dan Industri" /><datalist id="faculty-list">{faculties.map(f=><option key={f.name} value={f.name}/>)}</datalist></div>
+            <button className="btn btn-primary full" disabled={!sessionReady}>JOIN GAME →</button>
+            <p className="tiny" style={{margin:'12px 2px 0'}}>NIM hanya dipakai untuk mencegah peserta ganda dan tidak ditampilkan di leaderboard.</p>
+          </form>
+        </div>
+      </main>
+    )
+  }
 
   if (!session) return <main className="shell"><div className="panel"><div className="error">Sesi tidak ditemukan.</div><button className="btn btn-ghost" onClick={resetDevice}>Masuk ulang</button></div></main>
 
